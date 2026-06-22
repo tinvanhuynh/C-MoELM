@@ -1,45 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-eval_transfer_cmoe_v5_target_adaptive.py
-
-Target-Adaptive CMoE-LoRA Transfer for fact-checking datasets.
-
-This is an upgraded transfer script based on eval_transfer_cmoe_v5.py.
-
-Old transfer:
-  CMoE ver5 checkpoint
-  + FC classifier
-  + CE loss
-
-New transfer:
-  CMoE ver5 checkpoint
-  + flexible input mode: concat or pair_feature
-  + configurable separator token, e.g. [SEP] or </s>
-  + target/dataset-conditioned router
-  + optional router-only adaptation
-  + optional FC supervised contrastive loss
-  + optional load-balancing loss during FC transfer
-  + optional NLI replay with ver5 hard-negative loss
-  + same dev/test evaluation, best checkpoints, prediction CSV, metrics JSON
-
-Main objective:
-  L = CE_FC
-    + w_fc_con * SupCon_FC
-    + w_lb * L_loadbalance_FC
-    + w_nli_replay * L_NLI_hardneg_replay   optional
-
-Router upgrade:
-  router_input = pooled_no_lora + target_dataset_embedding
-
-Expected FC JSONL:
-  {"uid": ..., "premise": "...", "hypothesis": "...", "label": "e|c|n"}
-
-Labels:
-  e -> supported
-  c -> refuted
-  n -> NEI
-"""
-
 import os
 import sys
 import json
@@ -73,7 +31,7 @@ def import_ver5(src_dir: str):
     if src_dir not in sys.path:
         sys.path.append(src_dir)
 
-    from train_cmoe_lora_vinli_vianli_viclsr_v5 import (
+    from CMoELoRA_model import (
         CMoELoRA,
         CMoELoRAConfig,
         set_gates,
@@ -301,11 +259,6 @@ class FactCheckDataset(Dataset):
 # ============================================================
 
 def supervised_contrastive_loss(emb, labels, temperature=0.07):
-    """
-    In-batch supervised contrastive loss for FC labels.
-    Pulls same-label examples together and pushes different labels apart.
-    Returns 0 if there is no positive pair in the batch.
-    """
     if emb.size(0) <= 1:
         return emb.new_tensor(0.0)
 
@@ -333,9 +286,6 @@ def supervised_contrastive_loss(emb, labels, temperature=0.07):
 
 
 def load_balance_single(gates):
-    """
-    Switch-style load balance for one gate tensor [B,E].
-    """
     B, E = gates.shape
     importance = gates.mean(dim=0)
     top1 = torch.argmax(gates, dim=-1)
@@ -373,21 +323,6 @@ def router_stats(gates):
 # ============================================================
 
 class TargetAdaptiveCMoEForFactChecking(nn.Module):
-    """
-    Upgrade over old CMoEForFactChecking.
-
-    Old:
-      emb, gates = cmoe.encode_with_pooling(input_ids, mask)
-
-    New:
-      pooled0 = no-LoRA pooled features
-      router_input = pooled0 + target_dataset_embedding
-      gates = router(router_input)
-      second pass activates CMoE-LoRA experts with target-aware gates
-
-    This keeps the ver5 CMoE checkpoint intact but makes routing target-aware.
-    """
-
     def __init__(
         self,
         cmoe,
@@ -639,18 +574,6 @@ def set_light_mode(model):
 
 
 def set_router_only_mode(model):
-    """
-    router_only:
-    - classifier train
-    - target dataset embedding train
-    - router train
-    - projection head train if present
-    - LoRA experts frozen
-    - backbone frozen
-
-    Use this to test whether NLI experts should be preserved and only the
-    router should adapt to the fact-checking target dataset.
-    """
     freeze_all_cmoe_except_new_modules(model)
 
     if hasattr(model.cmoe, "router") and model.cmoe.router is not None:
@@ -1625,12 +1548,9 @@ def build_parser():
         choices=["f1", "acc", "both", "train_loss"],
     )
     ap.add_argument("--save_every_epoch", action="store_true",
-                    help="Lưu model state sau mỗi epoch vào checkpoint_epochN/ "
-                         "kèm dev_metrics.json để dễ so sánh và eval lại.")
+                    help="")
     ap.add_argument("--eval_from_epoch", type=int, nargs="+", default=[],
-                    help="Eval lại trên dev+test từ checkpoint epoch cụ thể. "
-                         "Ví dụ: --eval_from_epoch 2 4 6 sẽ eval epoch 2, 4 và 6. "
-                         "Kết hợp với --eval_only để không train lại.")
+                    help="")
     ap.add_argument("--local_files_only", action="store_true")
 
     ap.add_argument("--clf_num_layers", type=int, default=3)
