@@ -144,20 +144,3 @@ The pre-trained C-MoELM model is publicly available on HuggingFace:
 👉 **[huggingface.co/huynhtin/C-MoELM](https://huggingface.co/huynhtin/C-MoELM)**
 
 ---
-
-## Citation
-
-```bibtex
-@article{huynh2025cmoe,
-  title={C-MoELM: Contrastive Mixture of Experts Language Model with Negative Sample Learning for Fact-Checking},
-  author={Huynh, Tin Van and Nguyen, Kiet Van and Nguyen, Ngan Luu-Thuy},
-  journal={Engineering Applications of Artificial Intelligence},
-  year={2025}
-}
-```
-
----
-
-## Acknowledgement
-
-This research is funded by Vietnam National University Ho Chi Minh City (VNU-HCM) under grant number NCM2025-26-02.
