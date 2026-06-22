@@ -12,7 +12,6 @@ C-MoELM is evaluated on three Vietnamese fact-checking benchmarks. The datasets 
 
 ### ViWikiFC
 - **Paper:** [ViWikiFC: Fact-Checking for Vietnamese Wikipedia-Based Textual Knowledge Source]([https://aclanthology.org/2024.lrec-main.726/](https://arxiv.org/abs/2405.07615))
-- **GitHub:** https://github.com/drunkard72/ViWikiFC
 
 ### ViNumFCR
 - **Paper:** [ViNumFCR: A Dataset for Numerical Reasoning-based Fact-Checking in Vietnamese]([https://aclanthology.org/2025.naacl-long.364/](https://aclanthology.org/2025.inlg-main.9/))
