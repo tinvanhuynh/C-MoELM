@@ -1,33 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-train_cmoe_lora_vinli_vianli_viclsr_3modes_entailpos.py
-
-CMoE-LoRA contrastive training for Vietnamese NLI (ViNLI + ViANLI) with semantic hard-negative mining
-using huynhtin/ViCLSR (XLM-R backbone).
-
-Three experimental cases (toggle with --neutral_mode):
-  Case 1: neutral_mode=hardneg
-    - POSITIVE is ALWAYS entailment only (SimCSE / CL-NLI common setup)
-    - Train only on entailment pairs (premise, hypothesis_entail)
-    - Neutral + contradiction are used as negative pool to mine hard negatives (same premise first)
-
-  Case 2: neutral_mode=ignore
-    - POSITIVE is ALWAYS entailment only
-    - Neutral is ignored entirely for hard negative mining
-    - Contradiction is used as hard-negative pool (same premise first; fallback to global contradiction)
-
-  Case 3: neutral_mode=weakpos
-    - Train on entailment pairs (strong positive) AND neutral pairs (weak positive)
-    - Add a neutral-positive InfoNCE term weighted by --w_neutral_pos
-    - Hard negatives are preferably contradictions (fallback: non-entail)
-
-Loss:
-  L = L_contrastive + w_lb * L_loadbalance + w_adv * L_adv
-
-Notes:
-- DO NOT hardcode HF tokens. Use env var HF_TOKEN if needed.
-"""
-
 import os
 import json
 import math
@@ -179,13 +149,6 @@ def apply_pooling_from_outputs(outputs, attention_mask: torch.Tensor, pooling: s
 # 4) Router
 # ============================================================
 class Router(nn.Module):
-    """
-    Improved router:
-    - input LayerNorm (stabilize routing logits)
-    - temperature annealing (encourage exploration early, sharper later)
-    - router noise on logits (exploration) during training
-    """
-
     def __init__(
         self,
         hidden_size: int,
@@ -260,15 +223,6 @@ class Router(nn.Module):
 # 5) LoRA-MoE Linear (experts = LoRA A/B per linear layer)
 # ============================================================
 class LoRAMoELinear(nn.Module):
-    """
-    Wrap base linear-like module:
-      y = base_layer(x) + MoE-LoRA(x)
-
-    Supports:
-    - nn.Linear
-    - bitsandbytes 4bit linear (as long as it has in_features/out_features and callable forward)
-    """
-
     def __init__(
         self,
         base_linear: nn.Module,
@@ -582,10 +536,6 @@ class CMoELoRA(nn.Module):
 
     @torch.no_grad()
     def _pooled_no_lora(self, input_ids, attention_mask) -> torch.Tensor:
-        """
-        First pass: get router features with gates=None (LoRA inactive).
-        Khi train thật sự với --pooling khác mean, router cũng dùng cùng pooling đó.
-        """
         set_gates(None)
         need_hidden_states = (self.cfg.pooling in ["last2_mean", "first_last_mean"])
         out = self.lm.model(
@@ -604,16 +554,6 @@ class CMoELoRA(nn.Module):
         return self.encode_with_pooling(input_ids, attention_mask, pooling=self.cfg.pooling)
 
     def encode_with_pooling(self, input_ids, attention_mask, pooling: str = "mean") -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Eval-only flexible extraction:
-        - Nếu pooling == self.cfg.pooling: khớp đúng thiết kế train
-        - Nếu pooling != self.cfg.pooling: useful cho ablation nhanh trên cùng checkpoint
-
-        Lưu ý:
-        - Router pass 1 vẫn dùng self.cfg.pooling nếu bạn train model đó.
-        - Ở eval ablation, bạn có thể đổi pooling ở pass 2 để benchmark extraction.
-        """
-        # Router features: giữ đúng config train của model
         pooled0 = self._pooled_no_lora(input_ids, attention_mask)  # [B,H]
         gates = self.router(pooled0)                               # [B,E]
 
@@ -816,23 +756,6 @@ def build_same_premise_hardneg_semantic(
     num_hard_negs: int = 4,
     keep_full_nli_for_sup: bool = False,
 ) -> List[Dict]:
-    """
-    Attach ex["hard_negatives"] and ex["hard_negative_scores"] for each TRAIN example we keep.
-
-    hardneg:
-      - Keep ONLY entailment examples
-      - Negatives: same-premise non-entail (neutral + contradiction)
-
-    ignore:
-      - Keep ONLY entailment examples
-      - Negatives: contradiction only
-
-    weakpos:
-      - Keep entailment + neutral examples
-      - Drop contradictions from positive training pairs
-      - Hard negatives use contradiction as primary pool
-      - Neutral is NOT used as main negative pool in weakpos
-    """
     rnd = random.Random(seed)
     by_premise = defaultdict(list)
     global_non_entail: List[str] = []
@@ -1053,10 +976,6 @@ class NLITripletDataset(Dataset):
         }
 
 def collate_nli_triplet_dynamic(batch, pad_token_id: int):
-    """
-    Dynamic padding with ONE shared max length for p/h/n in the batch.
-    This is required because training_step concatenates p, h, n along dim=0.
-    """
     K = batch[0]["n_input_ids"].size(0)
 
     max_len = 1
