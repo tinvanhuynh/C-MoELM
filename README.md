@@ -5,6 +5,23 @@
 
 **C-MoELM** is a parameter-efficient sentence representation model for Natural Language Inference (NLI) and Fact-Checking. It integrates a dynamic Top-*k* Mixture-of-Experts (MoE) routing mechanism into Quantized Low-Rank Adaptation (QLoRA), trained with a Fusion Negative Sample Learning strategy that combines semantic hard-negative mining, synthetic negative generation, and a weak-positive formulation for neutral pairs. These signals are jointly optimized with supervised NLI classification, domain adversarial alignment, and load-balancing regularization within a unified multi-objective training framework.
 
+> ⚠️ Pre-training code and training instructions will be released upon paper acceptance. Transfer task fine-tuning code is available in `src/`.
+
+---
+
+## Repository Structure
+
+```
+C-MoELM/
+├── README.md
+├── src/
+│   ├── CMoELoRA_model.py
+│   ├── transfer_fact_checking.py    # Transfer task fine-tuning
+│   └── requirements.txt
+└── data/
+    └── README.md                    # Dataset download instructions
+```
+
 ---
 
 ## Performance
@@ -39,6 +56,87 @@ C-MoELM outperforms 19 baseline models across all evaluation settings on three f
 
 ---
 
+## Installation
+
+```bash
+pip install -r src/requirements.txt
+```
+
+> **Requirements:** Python 3.9+, CUDA 11.8+, GPU with at least 24GB VRAM recommended.
+
+---
+
+## Transfer Task Fine-tuning
+
+### 1. Download the pre-trained model
+
+```python
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id="huynhtin/C-MoELM", local_dir="./cmoe_checkpoint")
+```
+
+### 2. Prepare the dataset
+
+Please refer to [`data/README.md`](data/README.md) for dataset download instructions and expected directory structure.
+
+### 3. Run transfer fine-tuning
+
+```bash
+python src/transfer_fact_checking.py \
+  --src_dir src/ \
+  --cmoe_ckpt_dir ./cmoe_checkpoint \
+  --train_file data/vifactcheck/train.jsonl \
+  --dev_file data/vifactcheck/dev.jsonl \
+  --test_file data/vifactcheck/test.jsonl \
+  --output_dir ./transfer_runs/vifactcheck \
+  --max_len 256 \
+  --batch_size 16 \
+  --eval_batch_size 16 \
+  --epochs 7 \
+  --grad_accum 1 \
+  --lr 5e-5 \
+  --pooling last2_mean \
+  --sep_token "[SEP]" \
+  --input_mode concat \
+  --tuning_mode light \
+  --clf_hidden_mult 1 \
+  --clf_num_layers 2 \
+  --clf_use_layernorm \
+  --w_fc_con 0.0 \
+  --w_lb 0.01 \
+  --log_every 100 \
+  --save_every_epoch
+```
+
+> To evaluate a previously trained checkpoint without re-training, add `--eval_from_epoch <epoch_number>` to load and evaluate the saved model at that epoch.
+
+### 4. Adapting to other datasets
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--train_file` | Path to training data | — |
+| `--dev_file` | Path to validation data | — |
+| `--test_file` | Path to test data | — |
+| `--output_dir` | Output directory | — |
+| `--max_len` | Max sequence length | `256` |
+| `--batch_size` | Training batch size | `16` |
+| `--lr` | Learning rate | `5e-5` |
+| `--epochs` | Max training epochs | `7` |
+| `--input_mode` | Input format: `concat` or `separate` | `concat` |
+
+The following flags can be adjusted based on your dataset size and task complexity:
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--clf_hidden_mult` | Hidden size multiplier for classification head | `1` |
+| `--clf_num_layers` | Number of layers in classification head | `2` |
+| `--w_fc_con` | Weight for contrastive loss during transfer | `0.0` |
+| `--w_lb` | Weight for load balancing loss | `0.01` |
+
+> For smaller datasets, reducing `--clf_num_layers` or `--clf_hidden_mult` may help prevent overfitting.
+
+---
+
 ## Pre-trained Model
 
 The pre-trained C-MoELM model is publicly available on HuggingFace:
@@ -47,8 +145,19 @@ The pre-trained C-MoELM model is publicly available on HuggingFace:
 
 ---
 
-## Source Code
+## Citation
 
-> ⚠️ Source code will be released upon paper acceptance.
+```bibtex
+@article{huynh2025cmoe,
+  title={C-MoELM: Contrastive Mixture of Experts Language Model with Negative Sample Learning for Fact-Checking},
+  author={Huynh, Tin Van and Nguyen, Kiet Van and Nguyen, Ngan Luu-Thuy},
+  journal={Engineering Applications of Artificial Intelligence},
+  year={2025}
+}
+```
 
 ---
+
+## Acknowledgement
+
+This research is funded by Vietnam National University Ho Chi Minh City (VNU-HCM) under grant number NCM2025-26-02.
