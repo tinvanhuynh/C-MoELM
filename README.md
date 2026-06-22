@@ -5,7 +5,7 @@
 
 **C-MoELM** is a parameter-efficient sentence representation model for Natural Language Inference (NLI) and Fact-Checking. It integrates a dynamic Top-*k* Mixture-of-Experts (MoE) routing mechanism into Quantized Low-Rank Adaptation (QLoRA), trained with a Fusion Negative Sample Learning strategy that combines semantic hard-negative mining, synthetic negative generation, and a weak-positive formulation for neutral pairs. These signals are jointly optimized with supervised NLI classification, domain adversarial alignment, and load-balancing regularization within a unified multi-objective training framework.
 
-> ⚠️ Pre-training code and training instructions will be released upon paper acceptance. Transfer task fine-tuning code is available in `src/`.
+> ⚠️ Transfer task fine-tuning code is available in `src/`.
 
 ---
 
